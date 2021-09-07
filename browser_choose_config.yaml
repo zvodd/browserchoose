@@ -1,0 +1,24 @@
+---
+selected: "0"
+browsers:
+  "0":
+    name: "Firefox"
+    icon: "./firefox.png"
+    path: "$PROGRAMFILES(X86)/Mozilla Firefox/firefox.exe"
+    args:
+      - "1"
+      - "2"
+  "1":
+    name: "Chrome"
+    icon: "./firefox.png"
+    path: "$PROGRAMFILES(X86)/Mozilla Firefox/firefox.exe"
+    args:
+      - "1"
+      - "2"
+  "2":
+    name: "Opera"
+    icon: "./firefox.png"
+    path: "$PROGRAMFILES(X86)/Mozilla Firefox/firefox.exe"
+    args:
+      - "1"
+      - "2"

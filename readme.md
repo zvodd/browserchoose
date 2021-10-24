@@ -1,0 +1,1 @@
+Dynamic default browser switcher and URL handler.

@@ -6,7 +6,8 @@ import (
 
 	"reflect"
 
-	"example.com/icon"
+	"browserchoose/icon"
+
 	"github.com/getlantern/systray"
 	"github.com/spf13/viper"
 )
@@ -23,7 +24,9 @@ func Configure() *viper.Viper {
 	cfg := viper.New()
 	cfg.SetConfigName("browser_choose_config") // name of config file (without extension)
 	cfg.SetConfigType("yaml")                  // REQUIRED if the config file does not have the extension in the name
-	cfg.AddConfigPath("$APPDATA/xyz.browserchooser")
+	// TODO check OS
+	// TODO Check file exists, or run in portable mode?
+	cfg.AddConfigPath("$APPDATA/browserchoose.zvodd.github.com")
 	cfg.AddConfigPath(".")    // optionally look for config in the working directory
 	err := cfg.ReadInConfig() // Find and read the config file
 	if err != nil {           // Handle errors reading the config file

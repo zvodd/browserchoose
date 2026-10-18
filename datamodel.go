@@ -1,6 +1,7 @@
 package browserchoose
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -9,6 +10,9 @@ import (
 
 type BrowserItem struct {
 	Name string
+	Icon string
+	Path string
+	Args []string
 }
 
 type BrowserList struct {
@@ -45,10 +49,23 @@ func NewBrowerListFromViper(cfg *viper.Viper) *BrowserList {
 	// end Order keys
 
 	for _, k := range browserKeysStr {
-		item := BrowserItem{}
 		v := browsersMap[k]
-		bsettings := v.(map[string]interface{})
-		item.Name = bsettings["name"].(string)
+		bsettings, ok := v.(map[string]interface{})
+		if !ok {
+			panic(fmt.Sprintf("Bad config browsers[%q] : expected a mapping of settings", k))
+		}
+
+		item := BrowserItem{}
+		item.Name, _ = bsettings["name"].(string)
+		item.Icon, _ = bsettings["icon"].(string)
+		item.Path, _ = bsettings["path"].(string)
+		if rawArgs, ok := bsettings["args"].([]interface{}); ok {
+			for _, a := range rawArgs {
+				if s, ok := a.(string); ok {
+					item.Args = append(item.Args, s)
+				}
+			}
+		}
 		bList.List = append(bList.List, item)
 	}
 

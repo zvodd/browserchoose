@@ -2,21 +2,12 @@ package browserchoose
 
 import (
 	"fmt"
-	"time"
-
 	"reflect"
 
 	"browserchoose/icon"
 
 	"github.com/getlantern/systray"
 	"github.com/spf13/viper"
-)
-
-//
-// Some Config and Defaults
-//
-var (
-	browserItems = map[string]*systray.MenuItem{}
 )
 
 // Parse config
@@ -39,59 +30,74 @@ func Configure() *viper.Viper {
 func Main() {
 	cfg := Configure()
 	browserList := NewBrowerListFromViper(cfg)
-	// x := cfg.Sub("browsers") //.GetStringSlice("args")
-	// fmt.Printf("%+v\n\n\n", x)
-	// y := cfg.GetStringMap("browsers")
-	// fmt.Printf("%+v\n", y)
-	go systray.Run(SysTrayOnReadyFactory(browserList), systrayOnExit)
+	go systray.Run(SysTrayOnReadyFactory(browserList, cfg.ConfigFileUsed()), systrayOnExit)
 	HandleSingals()
 }
 
-func SysTrayOnReadyFactory(browserList *BrowserList) func() {
+// SysTrayOnReadyFactory builds the systray menu.
+//
+// The first entry is "Choose" (ask which browser to use for each URL); the rest
+// map to browserList.List by index. Selecting an entry "locks" the mux to that
+// browser. This lock is session-only: it starts on "Choose" and is never
+// written back to the config, so it does not survive a restart.
+func SysTrayOnReadyFactory(browserList *BrowserList, configPath string) func() {
 	return func() {
 		systray.SetIcon(icon.Data)
 		systray.SetTitle("Browser Choose")
-		// systray.SetTooltip(cfg.GetString("unused"))
-		rflslcs := make([]reflect.SelectCase, len(browserList.List))
+		systray.SetTooltip("Browser Choose")
 
-		for i, entry := range browserList.List {
-			mi := systray.AddMenuItem(entry.Name, fmt.Sprintf("Set browser to %s", entry.Name))
-			if i == browserList.Selected {
-				mi.Check()
-			}
-			browserItems[entry.Name] = mi
-			rflslcs[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mi.ClickedCh)}
+		// items[0] is the "Choose" entry; items[1:] map to browserList.List.
+		items := make([]*systray.MenuItem, 0, len(browserList.List)+1)
+
+		mChoose := systray.AddMenuItem("Choose", "Ask which browser to use each time")
+		mChoose.Check()
+		items = append(items, mChoose)
+
+		systray.AddSeparator()
+		for _, entry := range browserList.List {
+			mi := systray.AddMenuItem(entry.Name, fmt.Sprintf("Always open in %s", entry.Name))
+			items = append(items, mi)
 		}
 
 		systray.AddSeparator()
-		mQuit := systray.AddMenuItem("Quit", "Quit BrowserChooser")
-		// Sets the icon of a menu item. Only available on Mac and Windows.
-		mQuit.SetIcon(icon.Data)
+		mConfig := systray.AddMenuItem("Open config", "Open the config file for editing")
+		mQuit := systray.AddMenuItem("Quit", "Quit Browser Choose")
 
-		// append here so quit index is == len(browserList.List)
-		rflslcs = append(rflslcs, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mQuit.ClickedCh)})
+		// systray hands every menu item its own click channel. Fold them all
+		// into a single reflect.Select so one goroutine can wait on the lot.
+		cases := make([]reflect.SelectCase, 0, len(items)+2)
+		for _, mi := range items {
+			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mi.ClickedCh)})
+		}
+		configIndex := len(cases)
+		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mConfig.ClickedCh)})
+		quitIndex := len(cases)
+		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mQuit.ClickedCh)})
 
 		for loop := true; loop; {
-
-			// I wish that stray used a differnt mechanism for handling clicks, that isnt just every item has its own channel
-			// e.g. specify one channel and and an ID for each item.
-			// select {
-			// case <-mQuit.ClickedCh:
-			// 	systray.Quit()
-			// 	loop = false
-			// }
-			// fmt.Println("SystrayLoop Canary")
-
-			time.Sleep(1 * time.Second)
-			index, value, recvOK := reflect.Select(rflslcs)
-			if index == len(browserItems) {
+			index, _, _ := reflect.Select(cases)
+			switch {
+			case index == quitIndex:
 				systray.Quit()
 				loop = false
-			} else {
-				fmt.Print("Menu Item Clicked = ")
-				fmt.Printf("%d, %v, %v \n", index, value, recvOK)
-
-				fmt.Printf("\"%s\" \n\n", browserList.List[index].Name)
+			case index == configIndex:
+				if err := OpenConfig(configPath); err != nil {
+					fmt.Printf("open config: %v\n", err)
+				}
+			default:
+				// A mode entry was clicked: check it and clear the others.
+				for i, mi := range items {
+					if i == index {
+						mi.Check()
+					} else {
+						mi.Uncheck()
+					}
+				}
+				if index == 0 {
+					fmt.Println("mux mode: Choose (ask each time)")
+				} else {
+					fmt.Printf("mux mode: locked to %s\n", browserList.List[index-1].Name)
+				}
 			}
 		}
 	}

@@ -4,19 +4,19 @@ browsers:
   "0":
     name: "Firefox"
     icon: "./firefox.png"
-    path: "$PROGRAMFILES(X86)/Mozilla Firefox/firefox.exe"
+    path: "${PROGRAMFILES(X86)}/Mozilla Firefox/firefox.exe"
     args:
       - "-profile 1"
       - "@URL"
   "1":
     name: "Chrome"
     icon: "./firefox.png"
-    path: "$PROGRAMFILES(X86)/Mozilla Firefox/firefox.exe"
+    path: "${PROGRAMFILES(X86)}/Mozilla Firefox/firefox.exe"
     args:
       - "@URL"
   "2":
     name: "Opera"
     icon: "./firefox.png"
-    path: "$PROGRAMFILES(X86)/Mozilla Firefox/firefox.exe"
+    path: "${PROGRAMFILES(X86)}/Mozilla Firefox/firefox.exe"
     args:
       - "@URL"

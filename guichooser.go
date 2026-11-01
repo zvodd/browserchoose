@@ -9,6 +9,8 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+
+	"browserchoose/icon"
 )
 
 // Chooser is the window that asks which browser should handle a URL.
@@ -25,7 +27,7 @@ func NewChooser(a fyne.App, url string, browsers []BrowserItem, onPick func(inde
 	c := &Chooser{URL: url, Browsers: browsers, OnPick: onPick}
 	c.window = a.NewWindow("Open URL")
 	c.window.SetContent(c.build())
-	c.window.Resize(fyne.NewSize(420, 200))
+	c.window.Resize(fyne.NewSize(560, 220))
 	c.window.CenterOnScreen()
 	return c
 }
@@ -40,6 +42,7 @@ func (c *Chooser) Show() {
 // which happens once a browser has been picked or the window is dismissed.
 func RunChooser(url string, browsers []BrowserItem) {
 	a := app.New()
+	a.SetIcon(icon.AppIcon)
 	c := NewChooser(a, url, browsers, func(i int) {
 		log.Printf("launching %s for %s", browsers[i].Name, url)
 		if err := browsers[i].Launch(url); err != nil {
@@ -53,21 +56,23 @@ func RunChooser(url string, browsers []BrowserItem) {
 func (c *Chooser) build() fyne.CanvasObject {
 	title := widget.NewLabelWithStyle("Which browser should open this URL?", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 
-	urlEntry := widget.NewEntry()
-	urlEntry.SetText(c.URL)
-	urlEntry.Disable()
+	// A plain label, not a disabled Entry: disabled entries are drawn faded
+	// and become hard to read. Long URLs wrap at any character.
+	link := widget.NewLabel(c.URL)
+	link.Wrapping = fyne.TextWrapBreak
+	link.TextStyle = fyne.TextStyle{Monospace: true}
 
 	buttons := make([]fyne.CanvasObject, 0, len(c.Browsers))
 	for i := range c.Browsers {
 		buttons = append(buttons, c.browserButton(i))
 	}
 
-	body := container.NewVBox(
+	return container.NewPadded(container.NewVBox(
 		title,
-		urlEntry,
-		container.NewHBox(buttons...),
-	)
-	return container.NewPadded(body)
+		link,
+		widget.NewSeparator(),
+		container.NewGridWrap(fyne.NewSize(160, 48), buttons...),
+	))
 }
 
 func (c *Chooser) browserButton(index int) fyne.CanvasObject {

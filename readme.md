@@ -49,7 +49,7 @@ makes per-browser arguments, profiles, and even non-browser targets (such as
 | `launch.go` | Starts a browser with its args, and opens the config file. |
 | `signals.go` | Ctrl-C / SIGTERM handling. |
 | `guimain/` | Standalone runner for the chooser window (development aid). |
-| `icon/` | Tray icon (`icon_win.go` is generated from `WebIcon.png`). |
+| `icon/` | Embedded app icon (`icon.go`). `WebIcon.ico` is built from `WebIcon.png` by `icon/makeico`. |
 | `docs/` | Notes, including [`uri-handler-registration.md`](docs/uri-handler-registration.md). |
 
 ## Configuration
@@ -186,6 +186,16 @@ go build -ldflags "-H windowsgui" -o BrowserChoose.exe ./systraymain
 
 # standalone chooser for development
 go build -o guimain.exe ./guimain
+```
+
+The icon is embedded in the binary: the tray and window icons come from
+`icon/WebIcon.ico`, and the `.exe` file icon comes from
+`systraymain/rsrc_windows_amd64.syso`. After changing `icon/WebIcon.png`,
+regenerate both:
+
+```sh
+go run ./icon/makeico
+go run github.com/akavel/rsrc@latest -ico icon/WebIcon.ico -o systraymain/rsrc_windows_amd64.syso
 ```
 
 Run the standalone chooser without registering anything:

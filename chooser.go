@@ -8,6 +8,8 @@ import (
 
 	"fyne.io/fyne/v2/app"
 	"github.com/spf13/viper"
+
+	"browserchoose/icon"
 )
 
 // appID is the Fyne app ID and the name of the per-user data directory.
@@ -81,6 +83,7 @@ func Run(args []string) {
 	// Daemon mode: tray and URL listener share Fyne's event loop. Claim the
 	// pipe first so a second daemon exits before it shows a tray icon.
 	a := app.NewWithID(appID)
+	a.SetIcon(icon.AppIcon)
 	tray := newTrayApp(a, browsers, cfg.ConfigFileUsed())
 	check(ListenURLs(tray.handleURL))
 	check(tray.install())

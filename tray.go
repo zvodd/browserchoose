@@ -32,7 +32,7 @@ func (t *trayApp) install() error {
 		return fmt.Errorf("this Fyne driver has no system tray support")
 	}
 	t.desk = desk
-	desk.SetSystemTrayIcon(fyne.NewStaticResource("browserchoose.ico", icon.Data))
+	desk.SetSystemTrayIcon(icon.TrayIcon)
 	t.refreshMenu()
 
 	// Fyne quits once its last window is destroyed. Keep one hidden window

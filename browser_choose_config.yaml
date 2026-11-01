@@ -11,12 +11,13 @@ browsers:
   "1":
     name: "Chrome"
     icon: ""
-    path: "${PROGRAMFILES}/Google/Chrome/Application/chrome.exe"
+    path: "${PROGRAMFILES(X86)}/Google/Chrome/Application/chrome.exe"
     args:
       - "@URL"
   "2":
-    name: "Edge"
+    name: "LibreWolf"
     icon: ""
-    path: "${PROGRAMFILES(X86)}/Microsoft/Edge/Application/msedge.exe"
+    path: "${PROGRAMFILES}/LibreWolf/librewolf.exe"
     args:
+      - "-new-tab"
       - "@URL"

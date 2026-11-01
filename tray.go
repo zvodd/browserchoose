@@ -2,6 +2,7 @@ package browserchoose
 
 import (
 	"fmt"
+	"log"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -74,7 +75,7 @@ func (t *trayApp) buildMenu() *fyne.Menu {
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Open config", func() {
 			if err := OpenConfig(t.cfgPath); err != nil {
-				fyne.LogError("open config", err)
+				log.Printf("open config: %v", err)
 			}
 		}),
 		fyne.NewMenuItem("Quit", t.app.Quit),
@@ -104,7 +105,9 @@ func (t *trayApp) handleURL(url string) {
 }
 
 func (t *trayApp) launch(i int, url string) {
-	if err := t.browsers.List[i].Launch(url); err != nil {
-		fyne.LogError("launch "+t.browsers.List[i].Name, err)
+	b := t.browsers.List[i]
+	log.Printf("launching %s for %s", b.Name, url)
+	if err := b.Launch(url); err != nil {
+		log.Printf("launch %s: %v", b.Name, err)
 	}
 }

@@ -54,9 +54,10 @@ makes per-browser arguments, profiles, and even non-browser targets (such as
 
 ## Configuration
 
-Settings live in `browser_choose_config.yaml`. Viper searches for it in
-`%APPDATA%\browserchoose.zvodd.github.com\` and then in the working directory
-(portable mode). The tray's **Open config** item opens the file that was loaded.
+Settings live in `browser_choose_config.yaml`. It is searched for, in order, in
+`%APPDATA%\browserchoose.zvodd.github.com\`, next to `BrowserChoose.exe`, and in
+the working directory. Don't rely on the working directory: when Windows launches
+the URL handler it can be anywhere. The tray's **Open config** item opens the file that was loaded.
 
 ```yaml
 selected: "0"          # index of the browser highlighted by default
@@ -127,6 +128,12 @@ BrowserChoose is one binary with a few modes:
 Typical setup: run `BrowserChoose.exe -register`, select BrowserChoose for
 `http`/`https` in the Default apps window, then start `BrowserChoose.exe` (add it
 to your startup folder if you want it always on).
+
+## Troubleshooting
+
+The GUI build has no console, so diagnostics go to
+`%APPDATA%\browserchoose.zvodd.github.com\browserchoose.log`. Each URL handled,
+forwarded, or launched is logged there, and fatal errors also show a dialog.
 
 ## URL-handler registration
 

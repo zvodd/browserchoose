@@ -2,6 +2,7 @@ package browserchoose
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"fyne.io/fyne/v2"
@@ -40,8 +41,9 @@ func (c *Chooser) Show() {
 func RunChooser(url string, browsers []BrowserItem) {
 	a := app.New()
 	c := NewChooser(a, url, browsers, func(i int) {
+		log.Printf("launching %s for %s", browsers[i].Name, url)
 		if err := browsers[i].Launch(url); err != nil {
-			fmt.Fprintf(os.Stderr, "launch %s: %v\n", browsers[i].Name, err)
+			log.Printf("launch %s: %v", browsers[i].Name, err)
 		}
 	})
 	c.Show()

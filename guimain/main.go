@@ -13,7 +13,11 @@ import (
 )
 
 func main() {
-	cfg := browserchoose.Configure()
+	cfg, err := browserchoose.Configure()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	list := browserchoose.NewBrowerListFromViper(cfg)
 
 	url := "https://example.com"

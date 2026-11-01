@@ -155,9 +155,25 @@ registration and exits, separate from the normal systray run.
 
 ## Applying this to BrowserChoose
 
-1. Add a `registerbrowser` command-line mode that writes the Capabilities and
-   ProgID keys, requesting elevation via the `runas` verb when needed.
-2. Point the `shell\open\command` at `BrowserChoose.exe "%1"`.
-3. On Windows 8+, open `ms-settings:defaultapps` and prompt the user to select
-   BrowserChoose as the default web browser (no silent API).
-4. In normal mode, treat `os.Args[1]` as the URL to mux.
+BrowserChoose deliberately departs from the reference in two ways:
+
+1. **Per-user (HKCU) instead of HKLM.** `HKCU\Software\Classes` is merged into
+   `HKCR` for the current user, and `HKCU\Software\RegisteredApplications` is
+   honoured for per-user installs. Registration therefore needs no
+   administrator rights, so the `runas` elevation flow above is not used.
+2. **Its own ProgID, `BrowserChooseURL`,** with a `DefaultIcon` so Default apps
+   shows the app's icon.
+
+The steps:
+
+1. `BrowserChoose.exe -register` writes the ProgID, the `shell\open\command`
+   (`"<exe>" "%1"`), the Capabilities and `URLAssociations` keys, and the
+   `RegisteredApplications` entry, all under HKCU.
+2. It then opens `ms-settings:defaultapps` so the user selects BrowserChoose for
+   `http`/`https` (no silent API on Windows 8+).
+3. When Windows launches `BrowserChoose.exe "<url>"`, the URL is forwarded to the
+   running tray daemon over a named pipe. If no daemon is running, the chooser
+   window opens on its own.
+
+`BrowserChoose.exe -unregister` removes all of these keys. The `ftp` scheme is
+registered alongside `http`/`https` but has not been tested end to end.

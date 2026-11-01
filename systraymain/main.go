@@ -1,9 +1,11 @@
 package main
 
 import (
+	"os"
+
 	"browserchoose"
 )
 
 func main() {
-	browserchoose.Main()
+	browserchoose.Run(os.Args)
 }

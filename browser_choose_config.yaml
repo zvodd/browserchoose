@@ -3,20 +3,20 @@ selected: "0"
 browsers:
   "0":
     name: "Firefox"
-    icon: "./firefox.png"
+    icon: ""
     path: "${PROGRAMFILES(X86)}/Mozilla Firefox/firefox.exe"
     args:
-      - "-profile 1"
+      - "-new-tab"
       - "@URL"
   "1":
     name: "Chrome"
-    icon: "./firefox.png"
-    path: "${PROGRAMFILES(X86)}/Mozilla Firefox/firefox.exe"
+    icon: ""
+    path: "${PROGRAMFILES}/Google/Chrome/Application/chrome.exe"
     args:
       - "@URL"
   "2":
-    name: "Opera"
-    icon: "./firefox.png"
-    path: "${PROGRAMFILES(X86)}/Mozilla Firefox/firefox.exe"
+    name: "Edge"
+    icon: ""
+    path: "${PROGRAMFILES(X86)}/Microsoft/Edge/Application/msedge.exe"
     args:
       - "@URL"

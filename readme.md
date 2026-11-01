@@ -17,53 +17,61 @@ slot and turns it into a switchboard:
 flowchart TD
     A[Any app opens a URL] --> B[Windows URL handler]
     B --> C[BrowserChoose.exe %1]
-    C --> D{Mux mode}
-    D -->|Choose| E[Chooser window - pick a browser]
-    D -->|Locked to browser N| F[Launch browser N]
-    E --> F
-    F --> G[Real browser opens the URL]
+    C --> D{Daemon running?}
+    D -->|yes| E[Forward URL over named pipe]
+    D -->|no| F[Chooser window - pick a browser]
+    E --> G{Mux mode}
+    G -->|Locked, idle < 4 min| H[Launch locked browser]
+    G -->|Choose| I[Chooser window - pick a browser]
+    I --> J[Launch picked browser]
+    H --> K[Real browser opens the URL]
+    J --> K
+    F --> J
 ```
 
-The trick is to never
-hand the OS a real browser. The OS is pointed at BrowserChoose, and
-BrowserChoose proxies the launch. That proxy step is what makes per-browser
-arguments, profiles, and even non-browser targets (such as `wget` or a shell
-script) possible.
+The trick is to never hand the OS a real browser. The OS is pointed at
+BrowserChoose, and BrowserChoose proxies the launch. That proxy step is what
+makes per-browser arguments, profiles, and even non-browser targets (such as
+`wget` or a shell script) possible.
 
 ## Repository layout
 
 | Path | Purpose |
 | --- | --- |
-| `systraymain/` | Entry point (`main.go`) for the systray binary. Calls `browserchoose.Main()`. |
-| `chooser.go` | Root package: config loading, systray menu construction, click dispatch. |
+| `systraymain/` | Entry point (`main.go`). Calls `browserchoose.Run(os.Args)`. |
+| `chooser.go` | Config loading and `Run`: the dispatcher for daemon, URL-handler and `-register` modes. |
+| `tray.go` | Fyne system-tray menu (Choose, browser list, Open config, Quit) and URL routing. |
+| `mux.go` | Session-only browser lock with the 4-minute idle timeout. |
+| `guichooser.go` | The pick-a-browser window (`Chooser`, `NewChooser`, `RunChooser`). |
+| `ipc_windows.go` / `ipc_other.go` | Named-pipe forwarding from handler invocations to the running daemon. |
+| `register_windows.go` / `register_other.go` | Per-user (HKCU) URL-handler registration. |
 | `datamodel.go` | `BrowserItem` / `BrowserList` types and the viper → model parser. |
-| `signals.go` | OS signal handling and internal quit signalling. |
-| `gui/` | Fyne chooser window: `Chooser` type and `RunChooser` helper. |
-| `guimain/` | Entry point (`main.go`) that runs the chooser window on its own. |
-| `setdefaultbrowser/` | Registry work: registering BrowserChoose as the URL handler. |
-| `icon/` | Systray icon (`icon_win.go` is generated from `WebIcon.png`). |
+| `launch.go` | Starts a browser with its args, and opens the config file. |
+| `signals.go` | Ctrl-C / SIGTERM handling. |
+| `guimain/` | Standalone runner for the chooser window (development aid). |
+| `icon/` | Tray icon (`icon_win.go` is generated from `WebIcon.png`). |
 | `docs/` | Notes, including [`uri-handler-registration.md`](docs/uri-handler-registration.md). |
 
 ## Configuration
 
 Settings live in `browser_choose_config.yaml`. Viper searches for it in
-`$APPDATA/browserchoose.zvodd.github.com/` and then in the working directory
-(portable mode). The systray "Open config" action should open this same file.
+`%APPDATA%\browserchoose.zvodd.github.com\` and then in the working directory
+(portable mode). The tray's **Open config** item opens the file that was loaded.
 
 ```yaml
 selected: "0"          # index of the browser highlighted by default
 browsers:
   "0":                 # keys must be positive decimal integers; order = menu order
     name: "Firefox"
-    icon: "./firefox.png"
+    icon: ""           # optional; a path to an image shown on the chooser button
     path: "${PROGRAMFILES(X86)}/Mozilla Firefox/firefox.exe"
     args:
-      - "-profile 1"
+      - "-new-tab"
       - "@URL"         # "@URL" is replaced with the URL being opened
   "1":
     name: "Chrome"
-    icon: "./chrome.png"
-    path: "..."
+    icon: ""
+    path: "${PROGRAMFILES}/Google/Chrome/Application/chrome.exe"
     args:
       - "@URL"
 ```
@@ -71,26 +79,30 @@ browsers:
 Field notes:
 
 - `selected` — index into the ordered `browsers` list (stored as a string).
-  Read into the model, but not yet used by the chooser.
+  Read into the model, but not yet used.
 - `browsers` — keyed by integer-as-string; keys are sorted numerically to give
   a stable menu order.
-- `path` — executable to launch. Shell-style environment variables are expanded
-  with `os.ExpandEnv`; use `${NAME}` for names containing punctuation, e.g.
+- `path` — executable to launch. Environment variables are expanded with
+  `os.ExpandEnv`; use `${NAME}` for names containing punctuation, e.g.
   `${PROGRAMFILES(X86)}` (`$NAME(x86)` would *not* expand correctly).
-- `args` — argument list passed to the executable. The literal token `@URL` is
-  substituted with the URL being handled.
-- `icon` — path to the icon shown on the chooser button.
+- `args` — argument list passed to the executable. Each entry is a separate
+  argument, so `-profile` and its value go on two lines. The literal token
+  `@URL` is substituted with the URL being handled.
+- `icon` — optional image shown on the chooser button. Leave empty for a
+  text-only button.
 
 ## Systray behaviour
 
 The tray menu presents:
 
-- **Choose** *(default)* — the mux pops the chooser dialog on every URL. This
-  is the out-of-the-box mode and is **not** persisted.
-- **Browser list** — clicking a browser *locks* the mux to it, so URLs are sent
-  straight there without a dialog. Locking is **session-only**: it is never
-  written to the config and does not survive a restart. A locked choice may
-  also **time out** and fall back to *Choose* (not implemented yet).
+- **Choose** *(default)* — the chooser dialog pops up for every URL. This is
+  the out-of-the-box mode and is **not** persisted.
+- **Browser list** — clicking a browser *locks* the mux to it, so URLs go
+  straight there without a dialog. The lock is:
+  - **session-only**: it lives in memory, is never written to the config, and
+    does not survive a restart;
+  - **idle-limited**: it reverts to **Choose** after 4 minutes with no URL
+    routed through it. Each routed URL restarts the 4-minute countdown.
 - **Open config** — opens `browser_choose_config.yaml` in the default editor.
 - **Quit**.
 
@@ -98,70 +110,90 @@ The tray menu presents:
 
 In *Choose* mode the app shows a window with the URL that is being opened and a
 row of browser buttons (with icons, when `icon` resolves). Clicking one launches
-that browser with the URL and closes the window.
+that browser with the URL and closes the window. Picking a browser from the
+window does **not** change the tray lock.
 
-The window lives in the `gui` package (`gui.Chooser`, `gui.RunChooser`) and can
-be run on its own via the `guimain` command:
+## Running it
 
-```sh
-go run ./guimain https://example.com
-```
+BrowserChoose is one binary with a few modes:
+
+| Command | What it does |
+| --- | --- |
+| `BrowserChoose.exe` | Runs the tray daemon. Leave it running. |
+| `BrowserChoose.exe <url>` | Handles one URL (this is what Windows calls). Forwards it to the daemon if one is running; otherwise shows the chooser on its own. |
+| `BrowserChoose.exe -register` | Registers BrowserChoose as an http/https/ftp handler for the current user and opens **Default apps**. |
+| `BrowserChoose.exe -unregister` | Removes the registration. |
+
+Typical setup: run `BrowserChoose.exe -register`, select BrowserChoose for
+`http`/`https` in the Default apps window, then start `BrowserChoose.exe` (add it
+to your startup folder if you want it always on).
 
 ## URL-handler registration
 
-Registering BrowserChoose as the `http`/`https`/`ftp` handler is Windows
-registry work. The research extracted from the reference implementation — the
-exact keys, the Windows 8+ restrictions, and the elevation flow — is documented
-in [`docs/uri-handler-registration.md`](docs/uri-handler-registration.md).
+Registration writes per-user keys under `HKCU` (no administrator rights needed):
+
+- `HKCU\Software\Classes\BrowserChooseURL` — the ProgID, with
+  `shell\open\command` = `"<path>\BrowserChoose.exe" "%1"`.
+- `HKCU\Software\BrowserChoose\Capabilities` — app name, plus `URLAssociations`
+  for `http`, `https` and `ftp`.
+- `HKCU\Software\RegisteredApplications` — makes the app appear in Default apps.
+
+Windows 8 and later do not allow an app to set its own default browser, so
+`-register` opens `ms-settings:defaultapps` and the user confirms the choice.
+The full research, including the restrictions and the older Windows versions,
+is in [`docs/uri-handler-registration.md`](docs/uri-handler-registration.md).
 
 ## Current status
 
-Working today:
+Implemented, but not yet verified by a real Windows build (see below):
 
-- Reads and validates `browser_choose_config.yaml` via viper, including `icon`,
-  `path` and `args`.
-- Systray menu: **Choose** (default), the browser list (session-only lock),
-  **Open config**, and **Quit**.
-- The chooser window (`gui`/`guimain`) shows the URL and a button per browser,
-  and launches the picked browser with the URL and configured args.
-- Quits cleanly on the tray "Quit" item or an OS `SIGINT`/`SIGTERM`.
+- Config loading via viper, including `icon`, `path` and `args`.
+- Single-process daemon: the Fyne tray and the chooser share one event loop.
+- Tray menu with Choose, the browser lock, Open config, and Quit.
+- Session-only browser lock with a 4-minute idle timeout (`mux.go`, covered by
+  unit tests).
+- URL forwarding from handler invocations to the daemon over a named pipe. A
+  second daemon fails to claim the pipe and exits.
+- `-register` / `-unregister` for per-user handler registration.
+- Clean shutdown from the tray's Quit item or Ctrl-C / SIGTERM.
 
 Still to do:
 
-- Integrate the systray and the Fyne GUI into a single process (the GUI and the
-  tray each want the main thread / event loop, so this needs care).
-- Register BrowserChoose as the URL handler (see the registration doc) and feed
-  the incoming URL (`os.Args[1]`) into the mux.
-- Wire the tray's Choose/lock mode into the actual launch path, including the
-  optional lock timeout.
+- **Build-verify on Windows.** The Fyne packages need cgo, and this environment
+  has no C compiler. Build with a mingw-w64 `gcc` on `PATH`.
+- **Run it end to end.** Register, pick a browser in Default apps, click a link
+  in a real app, and check the chooser, the lock, and the timeout.
+- **Use the `selected` setting** to pre-highlight the default browser.
+- **Tests beyond the mux.** The config parser, the chooser, and the tray have
+  none yet.
 
-## Building and running
+## Building
 
-Requires Go 1.26 or newer (see the `go` directive in `go.mod`). The systray and
-model packages build anywhere, but the chooser GUI uses Fyne and therefore needs
-cgo and a C compiler (mingw-w64 `gcc` on Windows) with `CGO_ENABLED=1`.
+Requires Go 1.26 or newer (see the `go` directive in `go.mod`). The chooser and
+tray use Fyne, which needs cgo and a C compiler on Windows (mingw-w64 `gcc`)
+with `CGO_ENABLED=1`.
 
 ```sh
-# systray binary
-go build ./systraymain
+# tray daemon / URL handler (no console window)
+go build -ldflags "-H windowsgui" -o BrowserChoose.exe ./systraymain
 
-# chooser window binary (needs cgo)
-go build ./guimain
+# standalone chooser for development
+go build -o guimain.exe ./guimain
 ```
 
-Run the chooser on its own (no systray, no URL-handler registration needed):
+Run the standalone chooser without registering anything:
 
 ```sh
 go run ./guimain https://example.com
 ```
 
-`*.exe` build artifacts are git-ignored; run the build commands rather than
+Build artifacts (`*.exe`) are git-ignored; run the build commands rather than
 committing binaries.
 
 ## Credits / references
 
 - Registry/URL-handler approach adapted from
   [jopeek/browserchooser](https://github.com/jopeek/browserchooser).
-- Systray via [getlantern/systray](https://github.com/getlantern/systray).
-- GUI via [Fyne](https://fyne.io/).
+- GUI and system tray via [Fyne](https://fyne.io/).
+- Named-pipe transport via [go-winio](https://github.com/microsoft/go-winio).
 - Config via [spf13/viper](https://github.com/spf13/viper).
